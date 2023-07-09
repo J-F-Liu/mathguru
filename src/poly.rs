@@ -3,40 +3,170 @@ use std::borrow::Cow;
 use std::fmt;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
+pub trait Coeff:
+    Sized
+    + Add<Output = Self>
+    + AddAssign
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Neg<Output = Self>
+    + Eq
+    + PartialOrd
+    + Copy
+    + One
+    + Zero
+    + Signed
+{
+}
+
+impl<T> Coeff for T where
+    T: Sized
+        + Add<Output = Self>
+        + AddAssign
+        + Sub<Output = Self>
+        + Mul<Output = Self>
+        + Neg<Output = Self>
+        + Eq
+        + PartialOrd
+        + Copy
+        + One
+        + Zero
+        + Signed
+{
+}
+
+/// Symbol represents a variable of a polynomial
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Sym(pub Cow<'static, str>);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Factor {
-    pub symbol: Sym,
+/// Derived term is formed by apply function to another polynomial
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Der<T: Coeff> {
+    pub func: Cow<'static, str>,
+    pub param: Poly<T>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Base<T: Coeff> {
+    Sym(Sym),
+    Der(Der<T>),
+    Poly(Poly<T>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Factor<T: Coeff> {
+    pub base: Base<T>,
     pub power: i32,
 }
 
 /// monomial
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Mono<T> {
+pub struct Mono<T: Coeff> {
     pub coeff: T,
-    pub factors: Vec<Factor>,
+    pub factors: Vec<Factor<T>>,
 }
 
 /// polynomial
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Poly<T> {
+pub struct Poly<T: Coeff> {
     pub terms: Vec<Mono<T>>,
 }
 
-impl<T> Mono<T> {
+impl<T: Coeff> PartialOrd for Base<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Coeff> Ord for Base<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self {
+            Self::Sym(sym) => match other {
+                Self::Sym(sym2) => sym.cmp(sym2),
+                _ => std::cmp::Ordering::Less,
+            },
+            Self::Der(der) => match other {
+                Self::Sym(_) => std::cmp::Ordering::Greater,
+                Self::Der(der2) => der.func.cmp(&der2.func),
+                Self::Poly(_) => std::cmp::Ordering::Less,
+            },
+            Self::Poly(poly) => match other {
+                Self::Poly(poly2) => poly.cmp(poly2),
+                _ => std::cmp::Ordering::Greater,
+            },
+        }
+    }
+}
+
+impl<T: Coeff> PartialOrd for Factor<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Coeff> Ord for Factor<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.base.cmp(&other.base)
+    }
+}
+
+impl<T: Coeff> PartialOrd for Mono<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Coeff> Ord for Mono<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.factors.cmp(&other.factors)
+    }
+}
+
+impl<T: Coeff> PartialOrd for Poly<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Coeff> Ord for Poly<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.terms.cmp(&other.terms)
+    }
+}
+
+impl<T: Coeff> Base<T> {
+    pub fn is_symbol(&self) -> bool {
+        match self {
+            Self::Sym(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<T: Coeff> Factor<T> {
+    pub fn is_symbol(&self) -> bool {
+        self.power == 1 && self.base.is_symbol()
+    }
+}
+
+impl<T: Coeff> Mono<T> {
+    pub fn is_symbol(&self) -> bool {
+        self.factors.len() == 1 && self.factors[0].is_symbol()
+    }
+
     pub fn like(&self, other: &Self) -> bool {
         self.factors == other.factors
     }
+}
 
+impl<T: Coeff> Mono<T> {
     pub fn merge_factors(&mut self) {
         let mut i = 0;
         while i < self.factors.len() {
             let mut power = self.factors[i].power;
             let mut j = i + 1;
             while j < self.factors.len() {
-                if self.factors[j].symbol == self.factors[i].symbol {
+                if self.factors[j].base == self.factors[i].base {
                     let factor = self.factors.swap_remove(j);
                     power += factor.power;
                 } else {
@@ -50,11 +180,11 @@ impl<T> Mono<T> {
                 i += 1;
             }
         }
-        self.factors.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+        self.factors.sort_by(|a, b| a.base.cmp(&b.base));
     }
 }
 
-impl<T: Neg<Output = T>> Neg for Mono<T> {
+impl<T: Coeff> Neg for Mono<T> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -65,7 +195,7 @@ impl<T: Neg<Output = T>> Neg for Mono<T> {
     }
 }
 
-impl<T: Mul<Output = T> + AddAssign + Copy> Mul for Mono<T> {
+impl<T: Coeff> Mul for Mono<T> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -81,13 +211,39 @@ impl<T: Mul<Output = T> + AddAssign + Copy> Mul for Mono<T> {
     }
 }
 
-impl<T: One> From<&'static str> for Poly<T> {
+impl<S: Into<Cow<'static, str>>> From<S> for Sym {
+    fn from(value: S) -> Self {
+        Sym(value.into())
+    }
+}
+
+impl<T: Coeff, S: Into<Sym>> From<S> for Base<T> {
+    fn from(value: S) -> Self {
+        Base::Sym(value.into())
+    }
+}
+
+impl<T: Coeff> From<&'static str> for Poly<T> {
     fn from(value: &'static str) -> Self {
         Self {
             terms: vec![Mono {
                 coeff: T::one(),
                 factors: vec![Factor {
-                    symbol: Sym(value.into()),
+                    base: value.into(),
+                    power: 1,
+                }],
+            }],
+        }
+    }
+}
+
+impl<T: Coeff> From<String> for Poly<T> {
+    fn from(value: String) -> Self {
+        Self {
+            terms: vec![Mono {
+                coeff: T::one(),
+                factors: vec![Factor {
+                    base: value.into(),
                     power: 1,
                 }],
             }],
@@ -106,13 +262,13 @@ impl From<i32> for Poly<i32> {
     }
 }
 
-impl<T: One> From<Sym> for Poly<T> {
+impl<T: Coeff> From<Sym> for Poly<T> {
     fn from(value: Sym) -> Self {
         Self {
             terms: vec![Mono {
                 coeff: T::one(),
                 factors: vec![Factor {
-                    symbol: value,
+                    base: value.into(),
                     power: 1,
                 }],
             }],
@@ -120,13 +276,19 @@ impl<T: One> From<Sym> for Poly<T> {
     }
 }
 
-impl<T> From<Mono<T>> for Poly<T> {
+impl<T: Coeff> From<Mono<T>> for Poly<T> {
     fn from(value: Mono<T>) -> Self {
         Self { terms: vec![value] }
     }
 }
 
-impl<T: Zero + AddAssign + Copy> Poly<T> {
+impl<T: Coeff> Poly<T> {
+    pub fn is_symbol(&self) -> bool {
+        self.terms.len() == 1 && self.terms[0].is_symbol()
+    }
+}
+
+impl<T: Coeff> Poly<T> {
     pub fn merge_terms(&mut self) {
         let mut i = 0;
         while i < self.terms.len() {
@@ -151,7 +313,7 @@ impl<T: Zero + AddAssign + Copy> Poly<T> {
     }
 }
 
-impl<T: Neg<Output = T>> Neg for Poly<T> {
+impl<T: Coeff> Neg for Poly<T> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -161,7 +323,7 @@ impl<T: Neg<Output = T>> Neg for Poly<T> {
     }
 }
 
-impl<T: AddAssign + Zero + Copy> Add for Poly<T> {
+impl<T: Coeff> Add for Poly<T> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -174,7 +336,7 @@ impl<T: AddAssign + Zero + Copy> Add for Poly<T> {
     }
 }
 
-impl<T: AddAssign + Neg<Output = T> + Zero + Copy> Sub for Poly<T> {
+impl<T: Coeff> Sub for Poly<T> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -182,7 +344,7 @@ impl<T: AddAssign + Neg<Output = T> + Zero + Copy> Sub for Poly<T> {
     }
 }
 
-impl<T: Mul<Output = T> + AddAssign + Zero + Copy> Mul for Poly<T> {
+impl<T: Coeff> Mul for Poly<T> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
@@ -198,7 +360,7 @@ impl<T: Mul<Output = T> + AddAssign + Zero + Copy> Mul for Poly<T> {
     }
 }
 
-impl<T: AddAssign + Zero + Copy> Zero for Poly<T> {
+impl<T: Coeff> Zero for Poly<T> {
     fn zero() -> Self {
         Self { terms: vec![] }
     }
@@ -212,19 +374,19 @@ impl<T: AddAssign + Zero + Copy> Zero for Poly<T> {
     }
 }
 
-impl<T: AddAssign + Zero + Copy> AddAssign for Poly<T> {
+impl<T: Coeff> AddAssign for Poly<T> {
     fn add_assign(&mut self, rhs: Self) {
         *self = self.clone() + rhs;
     }
 }
 
-impl<T: Neg<Output = T> + AddAssign + Zero + Copy> SubAssign for Poly<T> {
+impl<T: Coeff> SubAssign for Poly<T> {
     fn sub_assign(&mut self, rhs: Self) {
         *self = self.clone() - rhs;
     }
 }
 
-impl<T: Mul<Output = T> + AddAssign + Zero + Copy> MulAssign for Poly<T> {
+impl<T: Coeff> MulAssign for Poly<T> {
     fn mul_assign(&mut self, rhs: Self) {
         *self = self.clone() * rhs;
     }
@@ -236,7 +398,32 @@ impl fmt::Display for Sym {
     }
 }
 
-impl<T: fmt::Display + Signed + One + PartialEq> fmt::Display for Poly<T> {
+impl<T: fmt::Display + Coeff> fmt::Display for Base<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Sym(sym) => write!(f, "{}", sym),
+            Self::Der(der) => {
+                write!(f, "{}", der.func)?;
+                if der.param.is_symbol() {
+                    write!(f, "{}", der.param)?;
+                } else {
+                    write!(f, "({})", der.param)?;
+                }
+                Ok(())
+            }
+            Self::Poly(poly) => {
+                if poly.is_symbol() {
+                    write!(f, "{}", poly)?;
+                } else {
+                    write!(f, "({})", poly)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl<T: fmt::Display + Coeff> fmt::Display for Poly<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut first = true;
         for term in &self.terms {
@@ -253,14 +440,14 @@ impl<T: fmt::Display + Signed + One + PartialEq> fmt::Display for Poly<T> {
                 }
             }
             let coeff = term.coeff.abs();
-            if !coeff.is_one() {
+            if !coeff.is_one() || term.factors.is_empty() {
                 write!(f, "{}", coeff)?;
             }
             for factor in &term.factors {
                 if factor.power == 1 {
-                    write!(f, "{}", factor.symbol)?;
+                    write!(f, "{}", factor.base)?;
                 } else {
-                    write!(f, "{}^{}", factor.symbol, factor.power)?;
+                    write!(f, "{}^{}", factor.base, factor.power)?;
                 }
             }
         }
