@@ -2,6 +2,15 @@
 name = "mathguru"
 version = "0.1.0"
 edition = "2021"
+authors = ["Junfeng Liu <china.liujunfeng@gmail.com>"]
+homepage = "https://github.com/J-F-Liu/mathguru"
+documentation = "https://docs.rs/crate/mathguru/"
+repository = "https://github.com/J-F-Liu/mathguru.git"
+license = "MIT"
+readme = "README.md"
+description = "An algebra system capable of mixed numeric and symbolic computation."
+categories = ["mathematics", "science"]
+keywords = ["algebra-system", "symbolic-computation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
