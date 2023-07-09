@@ -28,7 +28,7 @@ fn test_polynomial() {
 
     let n = Vec3::new("u".into(), "v".into(), "w".into());
     let ra = rotate(&a, &n, "c".into(), "s".into());
-    let rab = ra.cross(&b);
+    let mut rab = ra.cross(&b);
     let bra = -b.cross(&ra);
     assert_eq!(rab, bra);
 
@@ -41,10 +41,29 @@ fn test_polynomial() {
     println!("rotate = {}", &ra);
     println!("rab = {}", &rab);
 
+    for value in &mut rab.data {
+        value.group_by(vec![
+            "u".into(),
+            "v".into(),
+            "w".into(),
+            "c".into(),
+            "s".into(),
+        ]);
+    }
+    println!("rab = {}", &rab);
+
     let n1 = create_normal("a", "b", &n, "t".into(), "s".into());
     let n2 = create_normal("c", "d", &n, "t".into(), "s".into());
     let n3 = create_normal("e", "f", &n, "t".into(), "s".into());
-    let res = n1.cross(&n2).dot(&n3);
-    println!("(n1×n2)·n3 = {}", res);
+    let mut res = n1.cross(&n2).dot(&n3);
     dbg!(res.terms.len());
+    res.group_by(vec![
+        "u".into(),
+        "v".into(),
+        "w".into(),
+        "t".into(),
+        "s".into(),
+    ]);
+    dbg!(res.terms.len());
+    println!("(n1×n2)·n3 = {}", res);
 }

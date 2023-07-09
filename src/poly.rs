@@ -1,6 +1,8 @@
 use num_traits::{One, Signed, Zero};
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fmt;
+use std::hash::Hash;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 pub trait Coeff:
@@ -10,12 +12,14 @@ pub trait Coeff:
     + Sub<Output = Self>
     + Mul<Output = Self>
     + Neg<Output = Self>
+    + Hash
     + Eq
     + PartialOrd
     + Copy
     + One
     + Zero
     + Signed
+    + fmt::Display
 {
 }
 
@@ -26,12 +30,14 @@ impl<T> Coeff for T where
         + Sub<Output = Self>
         + Mul<Output = Self>
         + Neg<Output = Self>
+        + Hash
         + Eq
         + PartialOrd
         + Copy
         + One
         + Zero
         + Signed
+        + fmt::Display
 {
 }
 
@@ -40,34 +46,34 @@ impl<T> Coeff for T where
 pub struct Sym(pub Cow<'static, str>);
 
 /// Derived term is formed by apply function to another polynomial
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Der<T: Coeff> {
     pub func: Cow<'static, str>,
     pub param: Poly<T>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Base<T: Coeff> {
     Sym(Sym),
     Der(Der<T>),
     Poly(Poly<T>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Factor<T: Coeff> {
     pub base: Base<T>,
     pub power: i32,
 }
 
 /// monomial
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Mono<T: Coeff> {
     pub coeff: T,
     pub factors: Vec<Factor<T>>,
 }
 
 /// polynomial
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Poly<T: Coeff> {
     pub terms: Vec<Mono<T>>,
 }
@@ -87,7 +93,7 @@ impl<T: Coeff> Ord for Base<T> {
             },
             Self::Der(der) => match other {
                 Self::Sym(_) => std::cmp::Ordering::Greater,
-                Self::Der(der2) => der.func.cmp(&der2.func),
+                Self::Der(der2) => der.func.cmp(&der2.func).then(der.param.cmp(&der2.param)),
                 Self::Poly(_) => std::cmp::Ordering::Less,
             },
             Self::Poly(poly) => match other {
@@ -106,7 +112,9 @@ impl<T: Coeff> PartialOrd for Factor<T> {
 
 impl<T: Coeff> Ord for Factor<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.base.cmp(&other.base)
+        self.base
+            .cmp(&other.base)
+            .then(self.power.cmp(&other.power))
     }
 }
 
@@ -157,9 +165,7 @@ impl<T: Coeff> Mono<T> {
     pub fn like(&self, other: &Self) -> bool {
         self.factors == other.factors
     }
-}
 
-impl<T: Coeff> Mono<T> {
     pub fn merge_factors(&mut self) {
         let mut i = 0;
         while i < self.factors.len() {
@@ -181,6 +187,20 @@ impl<T: Coeff> Mono<T> {
             }
         }
         self.factors.sort_by(|a, b| a.base.cmp(&b.base));
+    }
+
+    pub fn group_by(self, bases: &[Base<T>]) -> (Mono<T>, Vec<Factor<T>>) {
+        let (factors, group): (Vec<_>, Vec<_>) = self
+            .factors
+            .into_iter()
+            .partition(|factor| bases.contains(&factor.base));
+        (
+            Mono {
+                coeff: self.coeff,
+                factors: group,
+            },
+            factors,
+        )
     }
 }
 
@@ -324,6 +344,52 @@ impl<T: Coeff> Poly<T> {
         }
         self.terms.sort_by(|a, b| a.factors.cmp(&b.factors));
     }
+
+    pub fn group_by(&mut self, bases: Vec<Base<T>>) {
+        let terms = std::mem::replace(&mut self.terms, vec![]);
+        let items = terms.into_iter().map(|mono| mono.group_by(&bases)).fold(
+            BTreeMap::new(),
+            |mut acc, (term, factors)| {
+                acc.entry(factors).or_insert(vec![]).push(term);
+                acc
+            },
+        );
+        self.terms = items
+            .into_iter()
+            .filter_map(|(mut factors, mut group)| {
+                // println!(
+                //     "{}",
+                //     Poly::from(Mono {
+                //         coeff: T::one(),
+                //         factors: factors.clone(),
+                //     })
+                // );
+                if group.len() == 1 {
+                    let mut mono = group.remove(0);
+                    mono.factors.extend(factors);
+                    Some(mono)
+                } else {
+                    let mut poly = Poly { terms: group };
+                    poly.merge_terms();
+                    if poly.is_zero() {
+                        None
+                    } else {
+                        factors.insert(
+                            0,
+                            Factor {
+                                base: Base::Poly(poly),
+                                power: 1,
+                            },
+                        );
+                        Some(Mono {
+                            coeff: T::one(),
+                            factors,
+                        })
+                    }
+                }
+            })
+            .collect();
+    }
 }
 
 impl<T: Coeff> Neg for Poly<T> {
@@ -411,7 +477,7 @@ impl fmt::Display for Sym {
     }
 }
 
-impl<T: fmt::Display + Coeff> fmt::Display for Base<T> {
+impl<T: Coeff> fmt::Display for Base<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Sym(sym) => write!(f, "{}", sym),
@@ -436,7 +502,7 @@ impl<T: fmt::Display + Coeff> fmt::Display for Base<T> {
     }
 }
 
-impl<T: fmt::Display + Coeff> fmt::Display for Factor<T> {
+impl<T: Coeff> fmt::Display for Factor<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.power == 1 {
             write!(f, "{}", self.base)?;
@@ -459,14 +525,14 @@ impl<T: fmt::Display + Coeff> fmt::Display for Factor<T> {
     }
 }
 
-impl<T: fmt::Display + Coeff> fmt::Display for Poly<T> {
+impl<T: Coeff> fmt::Display for Poly<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut first = true;
         for term in &self.terms {
             if first {
                 first = false;
                 if term.coeff.is_negative() {
-                    write!(f, " - ")?;
+                    write!(f, "- ")?;
                 }
             } else {
                 if term.coeff.is_positive() {

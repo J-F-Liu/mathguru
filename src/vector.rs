@@ -6,7 +6,7 @@ pub type Vector3<T> = Vector<T, 3>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Vector<T, const D: usize> {
-    data: [T; D],
+    pub data: [T; D],
 }
 
 impl<T: AddAssign, const D: usize> Add for Vector<T, D> {
