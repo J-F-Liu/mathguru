@@ -20,7 +20,7 @@ fn create_normal(a: &str, b: &str, n: &Vec3, c: Poly<i32>, s: Poly<i32>) -> Vec3
 }
 
 #[test]
-fn test_rotate() {
+fn test_polynomial() {
     let a = Vec3::new("a_x".into(), "a_y".into(), 1.into());
     let b = Vec3::new("b_x".into(), "b_y".into(), 1.into());
     println!("a = {}", &a);

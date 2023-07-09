@@ -283,12 +283,25 @@ impl<T: Coeff> From<Mono<T>> for Poly<T> {
 }
 
 impl<T: Coeff> Poly<T> {
+    pub fn apply<S: Into<Cow<'static, str>>>(&self, func: S) -> Poly<T> {
+        Self {
+            terms: vec![Mono {
+                coeff: T::one(),
+                factors: vec![Factor {
+                    base: Base::Der(Der {
+                        func: func.into(),
+                        param: self.clone(),
+                    }),
+                    power: 1,
+                }],
+            }],
+        }
+    }
+
     pub fn is_symbol(&self) -> bool {
         self.terms.len() == 1 && self.terms[0].is_symbol()
     }
-}
 
-impl<T: Coeff> Poly<T> {
     pub fn merge_terms(&mut self) {
         let mut i = 0;
         while i < self.terms.len() {
@@ -423,6 +436,29 @@ impl<T: fmt::Display + Coeff> fmt::Display for Base<T> {
     }
 }
 
+impl<T: fmt::Display + Coeff> fmt::Display for Factor<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.power == 1 {
+            write!(f, "{}", self.base)?;
+        } else {
+            match &self.base {
+                Base::Der(der) => {
+                    write!(f, "{}^{}", der.func, self.power)?;
+                    if der.param.is_symbol() {
+                        write!(f, "{}", der.param)?;
+                    } else {
+                        write!(f, "({})", der.param)?;
+                    }
+                }
+                _ => {
+                    write!(f, "{}^{}", self.base, self.power)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<T: fmt::Display + Coeff> fmt::Display for Poly<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut first = true;
@@ -444,11 +480,7 @@ impl<T: fmt::Display + Coeff> fmt::Display for Poly<T> {
                 write!(f, "{}", coeff)?;
             }
             for factor in &term.factors {
-                if factor.power == 1 {
-                    write!(f, "{}", factor.base)?;
-                } else {
-                    write!(f, "{}^{}", factor.base, factor.power)?;
-                }
+                write!(f, "{}", factor)?;
             }
         }
         Ok(())
