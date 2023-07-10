@@ -25,6 +25,12 @@ fn test_derive() {
     let a = Vec3::new("a_x".into(), "a_y".into(), 1.into());
     let b = Vec3::new("b_x".into(), "b_y".into(), 1.into());
 
+    let (sin_theta, cos_theta) = sin_cos("θ".into());
+    println!(
+        "{} = 1",
+        sin_theta.clone() * sin_theta + cos_theta.clone() * cos_theta
+    );
+
     let (sin_phi, cos_phi) = sin_cos("ψ".into());
     let (sin_omega, cos_omega) = sin_cos("ω".into());
     let n = Vec3::new(sin_phi.clone() * cos_omega, sin_phi * sin_omega, cos_phi);

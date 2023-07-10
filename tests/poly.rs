@@ -55,15 +55,43 @@ fn test_polynomial() {
     let n1 = create_normal("a", "b", &n, "t".into(), "s".into());
     let n2 = create_normal("c", "d", &n, "t".into(), "s".into());
     let n3 = create_normal("e", "f", &n, "t".into(), "s".into());
-    let mut res = n1.cross(&n2).dot(&n3);
+    let res = n1.cross(&n2).dot(&n3);
     dbg!(res.terms.len());
-    res.group_by(vec![
+
+    let constraint: Poly<i32> = Poly::from("u") * Poly::from("u")
+        + Poly::from("v") * Poly::from("v")
+        + Poly::from("w") * Poly::from("w");
+    let mut sim = res.simplify_by_identity(constraint, 1.into());
+    sim.expand();
+    dbg!(sim.terms.len());
+
+    let constraint: Poly<i32> = Poly::from("v") * Poly::from("v")
+        + Poly::from("u") * Poly::from("u")
+        + Poly::from("w") * Poly::from("w");
+    let mut sim = sim.simplify_by_identity(constraint, 1.into());
+    sim.expand();
+    dbg!(sim.terms.len());
+
+    let constraint: Poly<i32> = Poly::from("w") * Poly::from("w")
+        + Poly::from("u") * Poly::from("u")
+        + Poly::from("v") * Poly::from("v");
+    let mut sim = sim.simplify_by_identity(constraint, 1.into());
+    sim.expand();
+    dbg!(sim.terms.len());
+
+    let constraint: Poly<i32> =
+        Poly::from("t") * Poly::from("t") + Poly::from("s") * Poly::from("s");
+    let mut sim = sim.simplify_by_identity(constraint, 1.into());
+    sim.expand();
+    dbg!(sim.terms.len());
+
+    sim.group_by(vec![
         "u".into(),
         "v".into(),
         "w".into(),
         "t".into(),
         "s".into(),
     ]);
-    dbg!(res.terms.len());
-    println!("(n1×n2)·n3 = {}", res);
+    dbg!(sim.terms.len());
+    println!("(n1×n2)·n3 = {}", sim);
 }

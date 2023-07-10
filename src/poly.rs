@@ -1,9 +1,9 @@
 use num_traits::{One, Signed, Zero};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::hash::Hash;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::{fmt, vec};
 
 pub trait Coeff:
     Sized
@@ -149,6 +149,12 @@ impl<T: Coeff> Base<T> {
             _ => false,
         }
     }
+    pub fn is_polynomial(&self) -> bool {
+        match self {
+            Self::Poly(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl<T: Coeff> Factor<T> {
@@ -164,6 +170,28 @@ impl<T: Coeff> Mono<T> {
 
     pub fn like(&self, other: &Self) -> bool {
         self.factors == other.factors
+    }
+
+    /// If the monomial contains given factor, return remained part after extract the factor.
+    pub fn extract(&self, factor: &Factor<T>) -> Option<Mono<T>> {
+        for (index, fact) in self.factors.iter().enumerate() {
+            if fact.base == factor.base {
+                if fact.power >= factor.power {
+                    let mut factors = self.factors.clone();
+                    factors[index].power = fact.power - factor.power;
+                    if factors[index].power == 0 {
+                        factors.remove(index);
+                    }
+                    return Some(Mono {
+                        coeff: self.coeff,
+                        factors,
+                    });
+                } else {
+                    break;
+                }
+            }
+        }
+        None
     }
 
     pub fn merge_factors(&mut self) {
@@ -201,6 +229,40 @@ impl<T: Coeff> Mono<T> {
             },
             factors,
         )
+    }
+
+    pub fn contains_polynomial(&self) -> bool {
+        self.factors
+            .iter()
+            .any(|factor| factor.base.is_polynomial())
+    }
+
+    pub fn expand(self) -> Poly<T> {
+        let mut polynomials = vec![];
+        let mut factors = vec![];
+        for factor in self.factors {
+            match factor.base {
+                // Todo: expand polynomial with power greater than 1
+                Base::Poly(poly) => polynomials.push(poly),
+                _ => factors.push(factor),
+            }
+        }
+        let mono = Poly {
+            terms: vec![Mono {
+                coeff: self.coeff,
+                factors,
+            }],
+        };
+        if let Some(mut poly) = polynomials.pop() {
+            while let Some(poly2) = polynomials.pop() {
+                poly = poly * poly2;
+            }
+            poly.expand();
+            poly = poly * mono;
+            poly
+        } else {
+            mono
+        }
     }
 }
 
@@ -389,6 +451,106 @@ impl<T: Coeff> Poly<T> {
                 }
             })
             .collect();
+    }
+
+    pub fn collect_by(&self, factors: &[Factor<T>]) -> (Vec<Poly<T>>, Poly<T>) {
+        let mut collected_terms = vec![vec![]; factors.len()];
+        let mut remained_terms = vec![];
+        for term in &self.terms {
+            let mut collected = false;
+            for (index, factor) in factors.iter().enumerate() {
+                if let Some(mono) = term.extract(factor) {
+                    collected_terms[index].push(mono);
+                    collected = true;
+                    break;
+                }
+            }
+            if !collected {
+                remained_terms.push(term.clone());
+            }
+        }
+        (
+            collected_terms
+                .into_iter()
+                .map(|terms| Poly { terms })
+                .collect(),
+            Poly {
+                terms: remained_terms,
+            },
+        )
+    }
+
+    pub fn simplify_by_identity(&self, left_side: Poly<T>, right_side: Poly<T>) -> Poly<T> {
+        let factors = left_side
+            .clone()
+            .terms
+            .into_iter()
+            // assume only one factor in each term, and coeff of the factor is 1.
+            .map(|mut term| term.factors.remove(0))
+            .collect::<Vec<_>>();
+        let right_term = right_side.clone().terms.remove(0);
+        let (mut collected_terms, remained_terms) = self.collect_by(&factors);
+        let mut simlified_terms = vec![];
+        let mut common_count = 0;
+        let mut index = 0;
+        while index < collected_terms[0].terms.len() {
+            // find common term
+            let curr = &collected_terms[0].terms[index];
+            let positions = collected_terms[1..]
+                .iter()
+                .filter_map(|poly| poly.terms.iter().position(|term| term == curr))
+                .collect::<Vec<_>>();
+            if positions.len() == collected_terms.len() - 1 {
+                common_count += 1;
+                let term = collected_terms[0].terms.remove(index);
+                // println!("Common: {}", Poly::from(term.clone()));
+                for (pos, poly) in positions
+                    .into_iter()
+                    .zip(collected_terms.iter_mut().skip(1))
+                {
+                    poly.terms.remove(pos);
+                }
+                simlified_terms.push(term * right_term.clone());
+            } else {
+                index += 1;
+            }
+        }
+        // simplify nested polynomails
+        if common_count > 0 {
+            for poly in &mut collected_terms {
+                *poly = poly.simplify_by_identity(left_side.clone(), right_side.clone());
+            }
+        }
+        let mut final_terms = vec![];
+        for (factor, poly) in factors.into_iter().zip(collected_terms.into_iter()) {
+            if poly.terms.len() > 0 {
+                final_terms.push(Mono {
+                    coeff: T::one(),
+                    factors: vec![
+                        Factor {
+                            base: Base::Poly(poly),
+                            power: 1,
+                        },
+                        factor,
+                    ],
+                })
+            }
+        }
+        final_terms.extend(simlified_terms);
+        final_terms.extend(remained_terms.terms);
+        Poly { terms: final_terms }
+    }
+
+    pub fn expand(&mut self) {
+        let capacity = self.terms.len();
+        let terms = std::mem::replace(&mut self.terms, Vec::with_capacity(capacity));
+        for term in terms {
+            if term.contains_polynomial() {
+                self.terms.extend(term.expand().terms);
+            } else {
+                self.terms.push(term);
+            }
+        }
     }
 }
 
