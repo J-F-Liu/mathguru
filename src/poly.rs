@@ -172,6 +172,15 @@ impl<T: Coeff> Mono<T> {
         self.factors == other.factors
     }
 
+    pub fn power_of(&self, base: &Base<T>) -> i32 {
+        for factor in &self.factors {
+            if &factor.base == base {
+                return factor.power;
+            }
+        }
+        0
+    }
+
     /// If the monomial contains given factor, return remained part after extract the factor.
     pub fn extract(&self, factor: &Factor<T>) -> Option<Mono<T>> {
         for (index, fact) in self.factors.iter().enumerate() {
@@ -551,6 +560,37 @@ impl<T: Coeff> Poly<T> {
                 self.terms.push(term);
             }
         }
+    }
+
+    pub fn extract_common_factors(&mut self) -> Vec<Factor<T>> {
+        if self.is_zero() {
+            return vec![];
+        }
+        let mut common_factors = vec![];
+        let mut index = 0;
+        while index < self.terms[0].factors.len() {
+            // find common factor
+            let base = &self.terms[0].factors[index].base;
+            let mut min_power = self.terms[0].factors[index].power;
+            for term in &self.terms[1..] {
+                min_power = min_power.min(term.power_of(base));
+                if min_power == 0 {
+                    break;
+                }
+            }
+            if min_power > 0 {
+                let factor = Factor {
+                    base: base.clone(),
+                    power: min_power,
+                };
+                for term in self.terms.iter_mut() {
+                    *term = term.extract(&factor).unwrap();
+                }
+                common_factors.push(factor);
+            }
+            index += 1;
+        }
+        common_factors
     }
 }
 
