@@ -19,6 +19,13 @@ impl<T: Clone, const R: usize, const C: usize> Matrix<T, R, C> {
         let data = array_init(|row| self.data[index][row].clone());
         Vector { data }
     }
+
+    /// transpose
+    pub fn t(&self) -> Matrix<T, C, R> {
+        Matrix {
+            data: array_init(|r| self.row(r).data),
+        }
+    }
 }
 
 impl<T: AddAssign, const R: usize, const C: usize> Add for Matrix<T, R, C> {
