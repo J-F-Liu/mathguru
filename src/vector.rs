@@ -93,7 +93,7 @@ impl<T: Neg<Output = T> + Clone, const D: usize> Neg for Vector<T, D> {
     }
 }
 
-impl<T: Neg<Output = T> + Zero + Clone, const D: usize> Neg for &Vector<T, D> {
+impl<T: Neg<Output = T> + Clone, const D: usize> Neg for &Vector<T, D> {
     type Output = Vector<T, D>;
 
     fn neg(self) -> Self::Output {
@@ -141,6 +141,36 @@ impl<T: Mul<Output = T> + Sub<Output = T> + Clone> Vector3<T> {
                 self.x() * rhs.y() - rhs.x() * self.y(),
             ],
         }
+    }
+}
+
+impl<T: Clone> Vector<T, 2> {
+    pub fn new(x: T, y: T) -> Self {
+        Vector { data: [x, y] }
+    }
+    pub fn x(&self) -> T {
+        self.data[0].clone()
+    }
+    pub fn y(&self) -> T {
+        self.data[1].clone()
+    }
+}
+
+impl<T: Clone> Vector<T, 4> {
+    pub fn new(x: T, y: T, z: T, w: T) -> Self {
+        Vector { data: [x, y, z, w] }
+    }
+    pub fn x(&self) -> T {
+        self.data[0].clone()
+    }
+    pub fn y(&self) -> T {
+        self.data[1].clone()
+    }
+    pub fn z(&self) -> T {
+        self.data[2].clone()
+    }
+    pub fn w(&self) -> T {
+        self.data[3].clone()
     }
 }
 

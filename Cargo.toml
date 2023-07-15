@@ -16,3 +16,4 @@ keywords = ["algebra-system", "symbolic-computation"]
 
 [dependencies]
 num-traits = "0.2"
+array-init = "2.1.0"
