@@ -20,10 +20,24 @@ impl<T: Clone, const R: usize, const C: usize> Matrix<T, R, C> {
         Vector { data }
     }
 
+    pub unsafe fn get_unchecked(&self, (row, col): (usize, usize)) -> T {
+        self.data.get_unchecked(col).get_unchecked(row).clone()
+    }
+
     /// transpose
     pub fn t(&self) -> Matrix<T, C, R> {
         Matrix {
             data: array_init(|r| self.row(r).data),
+        }
+    }
+
+    pub fn block<const M: usize, const N: usize>(
+        &self,
+        start_row: usize,
+        start_col: usize,
+    ) -> Matrix<T, M, N> {
+        Matrix {
+            data: array_init(|c| array_init(|r| self.data[start_col + c][start_row + r].clone())),
         }
     }
 }
@@ -189,6 +203,113 @@ impl<
     fn mul(self, rhs: &Matrix<T, C, D>) -> Self::Output {
         let data = array_init(|c| array_init(|r| self.row(r).dot(&rhs.col(c))));
         Matrix { data }
+    }
+}
+
+impl<T: Clone> Matrix<T, 1, 1> {
+    pub fn determinant(&self) -> T {
+        self.data[0][0].clone()
+    }
+}
+
+impl<T: Mul<Output = T> + Sub<Output = T> + Clone> Matrix<T, 2, 2> {
+    pub fn determinant(&self) -> T {
+        self.data[0][0].clone() * self.data[1][1].clone()
+            - self.data[0][1].clone() * self.data[1][0].clone()
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + Sub<Output = T> + Clone> Matrix<T, 3, 3> {
+    pub fn determinant(&self) -> T {
+        unsafe {
+            let m11 = self.get_unchecked((0, 0));
+            let m12 = self.get_unchecked((0, 1));
+            let m13 = self.get_unchecked((0, 2));
+            let m21 = self.get_unchecked((1, 0));
+            let m22 = self.get_unchecked((1, 1));
+            let m23 = self.get_unchecked((1, 2));
+            let m31 = self.get_unchecked((2, 0));
+            let m32 = self.get_unchecked((2, 1));
+            let m33 = self.get_unchecked((2, 2));
+
+            let minor_m12_m23 = m22.clone() * m33.clone() - m32.clone() * m23.clone();
+            let minor_m11_m23 = m21.clone() * m33 - m31.clone() * m23;
+            let minor_m11_m22 = m21 * m32 - m31 * m22;
+
+            m11 * minor_m12_m23 - m12 * minor_m11_m23 + m13 * minor_m11_m22
+        }
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + Sub<Output = T> + Zero + Clone> Matrix<T, 4, 4> {
+    pub fn minor(&self, i: usize, j: usize) -> T {
+        let m = Matrix::<T, 3, 3> {
+            data: array_init(|c| {
+                array_init(|r| {
+                    self.data[if c < j { c } else { c + 1 }][if r < i { r } else { r + 1 }].clone()
+                })
+            }),
+        };
+        m.determinant()
+    }
+    pub fn determinant(&self) -> T {
+        let mut det = T::zero();
+        for (c, v) in self.row(0).data.into_iter().enumerate() {
+            if c % 2 == 0 {
+                det = det + v * self.minor(0, c);
+            } else {
+                det = det - v * self.minor(0, c);
+            }
+        }
+        det
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + Sub<Output = T> + Zero + Clone> Matrix<T, 5, 5> {
+    pub fn minor(&self, i: usize, j: usize) -> T {
+        let m = Matrix::<T, 4, 4> {
+            data: array_init(|c| {
+                array_init(|r| {
+                    self.data[if c < j { c } else { c + 1 }][if r < i { r } else { r + 1 }].clone()
+                })
+            }),
+        };
+        m.determinant()
+    }
+    pub fn determinant(&self) -> T {
+        let mut det = T::zero();
+        for (c, v) in self.row(0).data.into_iter().enumerate() {
+            if c % 2 == 0 {
+                det = det + v * self.minor(0, c);
+            } else {
+                det = det - v * self.minor(0, c);
+            }
+        }
+        det
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + Sub<Output = T> + Zero + Clone> Matrix<T, 6, 6> {
+    pub fn minor(&self, i: usize, j: usize) -> T {
+        let m = Matrix::<T, 5, 5> {
+            data: array_init(|c| {
+                array_init(|r| {
+                    self.data[if c < j { c } else { c + 1 }][if r < i { r } else { r + 1 }].clone()
+                })
+            }),
+        };
+        m.determinant()
+    }
+    pub fn determinant(&self) -> T {
+        let mut det = T::zero();
+        for (c, v) in self.row(0).data.into_iter().enumerate() {
+            if c % 2 == 0 {
+                det = det + v * self.minor(0, c);
+            } else {
+                det = det - v * self.minor(0, c);
+            }
+        }
+        det
     }
 }
 

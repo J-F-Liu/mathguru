@@ -181,6 +181,10 @@ impl<T: Coeff> Mono<T> {
         0
     }
 
+    pub fn powers_of(&self, bases: &[&Base<T>]) -> Vec<i32> {
+        bases.iter().map(|base| self.power_of(base)).collect()
+    }
+
     /// If the monomial contains given factor, return remained part after extract the factor.
     pub fn extract(&self, factor: &Factor<T>) -> Option<Mono<T>> {
         for (index, fact) in self.factors.iter().enumerate() {
@@ -465,16 +469,19 @@ impl<T: Coeff> Poly<T> {
     pub fn collect_by(&self, factors: &[Factor<T>]) -> (Vec<Poly<T>>, Poly<T>) {
         let mut collected_terms = vec![vec![]; factors.len()];
         let mut remained_terms = vec![];
+        let bases = factors.iter().map(|f| &f.base).collect::<Vec<_>>();
         for term in &self.terms {
-            let mut collected = false;
-            for (index, factor) in factors.iter().enumerate() {
-                if let Some(mono) = term.extract(factor) {
+            let powers = term.powers_of(&bases);
+            let (index, power) = powers
+                .into_iter()
+                .enumerate()
+                .max_by_key(|(_, power)| *power)
+                .unwrap();
+            if power >= factors[index].power {
+                if let Some(mono) = term.extract(&factors[index]) {
                     collected_terms[index].push(mono);
-                    collected = true;
-                    break;
                 }
-            }
-            if !collected {
+            } else {
                 remained_terms.push(term.clone());
             }
         }
@@ -592,6 +599,8 @@ impl<T: Coeff> Poly<T> {
         }
         common_factors
     }
+
+    pub fn factorize(&self) {}
 }
 
 impl<T: Coeff> Neg for Poly<T> {
@@ -729,26 +738,30 @@ impl<T: Coeff> fmt::Display for Factor<T> {
 
 impl<T: Coeff> fmt::Display for Poly<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut first = true;
-        for term in &self.terms {
-            if first {
-                first = false;
-                if term.coeff.is_negative() {
-                    write!(f, "- ")?;
-                }
-            } else {
-                if term.coeff.is_positive() {
-                    write!(f, " + ")?;
+        if self.is_zero() {
+            write!(f, "0")?;
+        } else {
+            let mut first = true;
+            for term in &self.terms {
+                if first {
+                    first = false;
+                    if term.coeff.is_negative() {
+                        write!(f, "- ")?;
+                    }
                 } else {
-                    write!(f, " - ")?;
+                    if term.coeff.is_positive() {
+                        write!(f, " + ")?;
+                    } else {
+                        write!(f, " - ")?;
+                    }
                 }
-            }
-            let coeff = term.coeff.abs();
-            if !coeff.is_one() || term.factors.is_empty() {
-                write!(f, "{}", coeff)?;
-            }
-            for factor in &term.factors {
-                write!(f, "{}", factor)?;
+                let coeff = term.coeff.abs();
+                if !coeff.is_one() || term.factors.is_empty() {
+                    write!(f, "{} ", coeff)?;
+                }
+                for factor in &term.factors {
+                    write!(f, "{} ", factor)?;
+                }
             }
         }
         Ok(())

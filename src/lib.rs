@@ -1,3 +1,4 @@
+// #![feature(generic_const_exprs)]
 mod matrix;
 mod poly;
 mod quat;

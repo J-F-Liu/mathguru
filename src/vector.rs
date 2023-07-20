@@ -1,3 +1,4 @@
+use array_init::array_init;
 use num_traits::Zero;
 use std::fmt;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
@@ -102,6 +103,18 @@ impl<T: Neg<Output = T> + Clone, const D: usize> Neg for &Vector<T, D> {
             data[i] = -data[i].clone();
         }
         Vector { data }
+    }
+}
+
+impl<T: Zero + AddAssign, const D: usize> Zero for Vector<T, D> {
+    fn zero() -> Self {
+        Vector {
+            data: array_init(|_| T::zero()),
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.data.iter().all(|v| v.is_zero())
     }
 }
 
