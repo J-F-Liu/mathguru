@@ -1,6 +1,6 @@
 [package]
 name = "mathguru"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Junfeng Liu <china.liujunfeng@gmail.com>"]
 homepage = "https://github.com/J-F-Liu/mathguru"
